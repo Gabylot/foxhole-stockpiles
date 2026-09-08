@@ -22,6 +22,12 @@ class Stockpile(BaseModel):
     hex: str | None = Field(description="Hex region name", default=None)
     coords: StockpileCoords | None = Field(description="Map coordinates", default=None)
     is_reserve: bool = Field(description="Whether this is a reserve stockpile", default=False)
+    access_level: str = Field(
+        description="Refinery access level: 'squad', 'personal' or 'public'", default="personal"
+    )
+    squad_id: int | None = Field(
+        description="Owning squad id for a squad refinery queue, else None", default=None
+    )
     items: list[StockpileItem] = Field(description="List of items", default_factory=list)
     timestamp: datetime = Field(description="last update datetime", default_factory=datetime.now)
     shard: str | None = Field(description="Shard name", default=None)

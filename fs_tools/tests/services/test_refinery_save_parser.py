@@ -107,6 +107,7 @@ class TestParseMapData:
         assert order.refined == 1128
         assert order.squad_id == 206
         assert order.is_squad_order is True
+        assert order.access_level == "squad"
         assert order.map_hint == "TerminusHex"
 
     def test_personal_order_has_no_squad_id(self, tmp_path) -> None:
@@ -118,6 +119,7 @@ class TestParseMapData:
         order = report.orders[0]
         assert order.squad_id is None
         assert order.is_squad_order is False
+        assert order.access_level == "personal"
 
     def test_chained_elements_are_all_parsed(self, tmp_path) -> None:
         """Consecutive elements without repeated headers are all parsed."""

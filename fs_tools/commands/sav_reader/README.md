@@ -20,6 +20,11 @@ Each storage bay stores:
   facility's in-game production list
 - The refinement progress (`Refined`)
 
+Every order carries an `access_level` derived from the game's
+`ERefineryOrderAccessLevel` enum: `"squad"` when the bay is shared with the
+whole squad, `"personal"` when it is refined for an individual player, or
+`"public"` when it is shared with everyone.
+
 Only facilities whose tooltips were recently opened are cached in the save,
 and only bays with an assigned order are serialized.
 
@@ -44,15 +49,63 @@ fs-tools read-sav --save-file "C:\...\SaveGames" --output refinery.json
 fs-tools read-sav --recipes my_recipes.json
 ```
 
+## Output format
+
+The command emits the same `{"stockpiles": [...]}` payload as the other
+stockpile commands, so refinery queues can flow through the same webhook and
+handlers unchanged. Each order becomes a `Stockpile` of type `Refinery` whose
+single item is the recipe being produced. Squad-shared orders are flagged with
+`is_reserve: true`.
+
+JSON fields per stockpile:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Resolved recipe display name (e.g. `Basic Materials`) |
+| `type` | string | Always `Refinery` |
+| `hex` | string | Hex region name (e.g. `TerminusHex`) |
+| `is_reserve` | boolean | `true` for squad-shared queues |
+| `access_level` | string | `"squad"`, `"personal"` or `"public"` |
+| `squad_id` | int \| null | Owning squad id for squad queues, else `null` |
+| `items` | array | Single item with `code`, `quantity` (= refined amount), `crated` |
+| `timestamp` | string | When the stockpile was parsed |
+
 ## Example output
+
+Console:
 
 ```
 Source: C:\Users\...\76561198103523496_MapData.sav
-Refinery orders found: 14
-  [TerminusHex] slot 0 (Cloth / Basic Materials): 18060 refined (squad 206)
-  [TerminusHex] slot 1 (Diesel / Diesel): 5309 refined (squad 206)
-  [TerminusHex] slot 2 (Explosive / Explosive Materials): 837 refined (squad 206)
+Refinery orders found: 9
+  [TerminusHex] Basic Materials: [RESERVE] Cloth x18060 (squad, squad 206)
+  [TerminusHex] Diesel: [RESERVE] Diesel x5309 (squad, squad 206)
+  [TerminusHex] Explosive Materials: [RESERVE] Explosive x837 (squad, squad 206)
   ...
+```
+
+JSON (`--output refinery.json`):
+
+```json
+{
+  "stockpiles": [
+    {
+      "name": "Basic Materials",
+      "type": "Refinery",
+      "hex": "TerminusHex",
+      "is_reserve": true,
+      "access_level": "squad",
+      "squad_id": 206,
+      "items": [
+        {
+          "code": "Cloth",
+          "quantity": 18060,
+          "crated": false
+        }
+      ],
+      "timestamp": "2026-09-08T18:07:04"
+    }
+  ]
+}
 ```
 
 ## Limitations

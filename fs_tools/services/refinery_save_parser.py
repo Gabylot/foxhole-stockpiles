@@ -42,9 +42,15 @@ _INDEX_TAG = b"\x06\x00\x00\x00Index\x00\x0d\x00\x00\x00ByteProperty\x00"
 _REFINED_TAG = b"\x08\x00\x00\x00Refined\x00\x0f\x00\x00\x00UInt16Property\x00"
 _STORAGE_STRUCT_NAME = b"MapDetailRefineryStorage\x00"
 
+# Patterns for RefineryOrders[] arrays (personal/public orders)
+_REFINERY_ORDERS_ARRAY_TAG = b"\x0f\x00\x00\x00RefineryOrders\x00\x0e\x00\x00\x00ArrayProperty\x00"
+_REFINERY_ORDER_STRUCT_NAME = b"MapDetailRefineryOrder\x00"
+_REFINERY_ORDER_INDEX_TAG = b"\x06\x00\x00\x00Index\x00\x0d\x00\x00\x00ByteProperty\x00"
+_REFINERY_ORDER_REFINED_TAG = b"\x08\x00\x00\x00Refined\x00\x0f\x00\x00\x00UInt16Property\x00"
+_REFINERY_ORDER_DURATION_TAG = b"\x08\x00\x00\x00Duration\x00\x0f\x00\x00\x00UInt16Property\x00"
+_REFINERY_ORDER_SOURCE_TAG = b"\x07\x00\x00\x00Source\x00\x0f\x00\x00\x00UInt16Property\x00"
+
 _ACCESS_LEVEL_ENUM_NAME = "ERefineryOrderAccessLevel"
-_ACCESS_LEVEL_PERSONAL = "ERefineryOrderAccessLevel::Personal"
-_ACCESS_LEVEL_SQUAD = "ERefineryOrderAccessLevel::Squad"
 _MAP_ID_PATTERN = re.compile(rb"EWorldConquestMapId::([A-Za-z0-9]+)\x00")
 
 
@@ -53,8 +59,10 @@ class RefineryOrder:
     """A single refinery storage bay order found in a MapData.sav.
 
     Attributes:
-        access_level (str): Raw enum value, e.g.
+        raw_access_level (str): Raw enum value, e.g.
             ``ERefineryOrderAccessLevel::Squad``.
+        access_level (str): Normalized access level, one of ``"squad"``,
+            ``"personal"`` or ``"public"``.
         squad_id (int | None): Squad identifier when the order is squad
             accessible, otherwise ``None``.
         index (int): Recipe slot index (0-9) of the refinery bay. The slot
@@ -64,6 +72,7 @@ class RefineryOrder:
             details block the order was found in, when available.
     """
 
+    raw_access_level: str
     access_level: str
     squad_id: int | None
     index: int
@@ -75,9 +84,9 @@ class RefineryOrder:
         """Whether this order is visible to the whole squad.
 
         Returns:
-            bool: True when the access level is ``Squad``.
+            bool: True when the access level is ``"squad"``.
         """
-        return self.access_level == _ACCESS_LEVEL_SQUAD
+        return self.access_level == "squad"
 
 
 @dataclass(frozen=True)
@@ -220,7 +229,8 @@ def _parse_storage_element(
         raise ValueError("Unexpected flag byte before Refined value")
     (refined,) = struct.unpack_from("<H", data, refined_tag_end + 1)
     order = RefineryOrder(
-        access_level=level,
+        raw_access_level=level,
+        access_level=level.rsplit("::", 1)[-1].lower(),
         squad_id=squad_id,
         index=index,
         refined=refined,
@@ -277,13 +287,18 @@ def parse_map_data(path: Path) -> MapDataReport:
     directly follow the previous element's terminator, so after each header
     match the following elements are chained while the pattern holds.
 
+    Foxhole stores the facility details twice (``InitalMapItemDetails`` and
+    ``RecentMapItemDetails``), so the same facility can appear as two chains
+    of bays. When two chains in the same map share the access level, squad id
+    and at least one recipe slot index, the earlier chain is treated as a
+    stale snapshot and dropped in favour of the later one.
+
     Args:
         path (Path): Path to the ``<steamid>_MapData.sav`` file.
 
     Returns:
-        MapDataReport: All refinery bay orders found in the file. Orders are
-        reported once per details block, so the same order may appear twice
-        (initial + recent details).
+        MapDataReport: The latest refinery bay orders found in the file, with
+        stale duplicate snapshots removed.
 
     Raises:
         ValueError: If the file is not a GVAS save.
@@ -291,7 +306,7 @@ def parse_map_data(path: Path) -> MapDataReport:
     data = path.read_bytes()
     if not data.startswith(_GVAS_MAGIC):
         raise ValueError(f"Not a GVAS save file: {path}")
-    orders: list[RefineryOrder] = []
+    chains: list[list[RefineryOrder]] = []
     element_terminator = b"\x05\x00\x00\x00" + b"None\x00"
     for match in re.finditer(re.escape(_ACCESS_LEVEL_TAG), data):
         tag_pos = match.start()
@@ -299,15 +314,48 @@ def parse_map_data(path: Path) -> MapDataReport:
             continue
         map_hint = _map_id_before(data, tag_pos)
         pos = tag_pos
+        chain: list[RefineryOrder] = []
         while True:
             try:
                 order, pos = _parse_storage_element(data, pos, map_hint)
             except ValueError:
                 break
-            orders.append(order)
+            chain.append(order)
             if data[pos : pos + len(element_terminator)] != element_terminator:
                 break
             pos += len(element_terminator)
             if not data[pos:].startswith(_ACCESS_LEVEL_TAG):
                 break
-    return MapDataReport(source=path, orders=orders)
+        if chain:
+            chains.append(chain)
+    return MapDataReport(source=path, orders=_dedupe_chains(chains))
+
+
+def _dedupe_chains(chains: list[list[RefineryOrder]]) -> list[RefineryOrder]:
+    """Drop stale duplicate facility snapshots, keeping the latest chain.
+
+    Two chains describing the same facility share the map hint, access level,
+    squad id and at least one recipe slot index. Chains appear in file order
+    (initial details before recent details), so the later chain wins.
+
+    Args:
+        chains (list[list[RefineryOrder]]): Parsed bay chains in file order.
+
+    Returns:
+        list[RefineryOrder]: Orders of the latest chain per facility.
+    """
+    kept: list[list[RefineryOrder]] = []
+    for chain in chains:
+        slots = {order.index for order in chain}
+        key = (chain[0].map_hint, chain[0].access_level, chain[0].squad_id)
+        duplicate = False
+        for prev_idx, prev in enumerate(kept):
+            prev_key = (prev[0].map_hint, prev[0].access_level, prev[0].squad_id)
+            prev_slots = {order.index for order in prev}
+            if key == prev_key and slots & prev_slots:
+                kept[prev_idx] = chain
+                duplicate = True
+                break
+        if not duplicate:
+            kept.append(chain)
+    return [order for chain in kept for order in chain]

@@ -7,6 +7,10 @@ from pathlib import Path
 
 import typer
 
+from foxhole_stockpiles.enums.stockpile_type import StockpileType
+from foxhole_stockpiles.handlers.stockpile_json import stockpiles_to_json_payload
+from foxhole_stockpiles.models.stockpile import Stockpile
+from foxhole_stockpiles.models.stockpile_item import StockpileItem
 from fs_tools.services.refinery_save_parser import MapDataReport, RefineryOrder, parse_map_data
 
 _DEFAULT_SAVE_GAMES_DIR = Path.home() / "AppData" / "Local" / "Foxhole" / "Saved" / "SaveGames"
@@ -104,25 +108,81 @@ def _resolve_save_file(save_file: Path) -> Path:
     raise typer.Exit(code=1)
 
 
-def _format_order(order: RefineryOrder, recipes: dict[int, dict[str, str]]) -> str:
-    """Format one order as a human readable line.
+def _format_stockpile(stockpile: Stockpile) -> str:
+    """Format one refinery stockpile as a human readable line.
+
+    Args:
+        stockpile (Stockpile): Converted refinery stockpile.
+
+    Returns:
+        str: Formatted line.
+    """
+    item = stockpile.items[0] if stockpile.items else None
+    item_label = f"{item.code} x{item.quantity}" if item else "empty"
+    owner = f"squad {stockpile.squad_id}" if stockpile.squad_id is not None else "personal"
+    reserve_tag = " [RESERVE]" if stockpile.is_reserve else ""
+    hex_label = stockpile.hex or "?"
+    return (
+        f"  [{hex_label}] {stockpile.name}:{reserve_tag}"
+        f" {item_label} ({stockpile.access_level}, {owner})"
+    )
+
+
+def _order_to_stockpile(
+    order: RefineryOrder, recipes: dict[int, dict[str, str]]
+) -> Stockpile:
+    """Map one refinery order onto the shared ``Stockpile`` model.
+
+    The refinery queue data is shaped to match the existing storage output so
+    it can flow through the same webhook/handlers unchanged. Each order becomes
+    a ``Stockpile`` of type ``Refinery`` whose single item is the recipe being
+    produced. Squad-shared orders are flagged as reserve stockpiles
+    (``is_reserve = True``) and carry their ``access_level`` and ``squad_id``.
 
     Args:
         order (RefineryOrder): Parsed order.
         recipes (dict[int, dict[str, str]]): Recipe slot mapping.
 
     Returns:
-        str: Formatted line.
+        Stockpile: The equivalent stockpile-ready representation.
     """
-    recipe = recipes.get(order.index)
-    item = recipe["display_name"] if recipe else f"Unknown slot {order.index}"
-    code = recipe["code_name"] if recipe else "?"
-    owner = f"squad {order.squad_id}" if order.squad_id is not None else "personal"
-    map_hint = order.map_hint or "?"
-    return (
-        f"  [{map_hint}] slot {order.index} ({code} / {item}):"
-        f" {order.refined} refined ({owner})"
+    recipe = recipes.get(order.index, {})
+    code = recipe.get("code_name", "Unknown")
+    display = recipe.get("display_name", f"slot {order.index}")
+    is_squad = order.is_squad_order
+    return Stockpile(
+        name=display,
+        type=StockpileType.REFINERY,
+        hex=order.map_hint,
+        is_reserve=is_squad,
+        access_level=order.access_level,
+        squad_id=order.squad_id,
+        items=[StockpileItem(code=code, quantity=order.refined, crated=False)],
     )
+
+
+def orders_to_stockpiles(
+    orders: list[RefineryOrder], recipes: dict[int, dict[str, str]]
+) -> list[Stockpile]:
+    """Convert all refinery orders to ``Stockpile`` models.
+
+    Args:
+        orders (list[RefineryOrder]): Parsed orders (may include duplicates
+            from the initial + recent details blocks).
+        recipes (dict[int, dict[str, str]]): Recipe slot mapping.
+
+    Returns:
+        list[Stockpile]: One ``Stockpile`` per unique order.
+    """
+    result: list[Stockpile] = []
+    seen: set[tuple[object, ...]] = set()
+    for order in orders:
+        key = (order.index, order.refined, order.squad_id, order.access_level)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(_order_to_stockpile(order, recipes))
+    return result
 
 
 async def run(
@@ -149,36 +209,18 @@ async def run(
     resolved = _resolve_save_file(save_file if save_file is not None else _DEFAULT_SAVE_GAMES_DIR)
     report: MapDataReport = parse_map_data(resolved)
     recipe_map = _load_recipes(recipes)
+    stockpiles: list[Stockpile] = orders_to_stockpiles(report.orders, recipe_map)
 
     if output is not None:
-        payload = {
-            "source": str(report.source),
-            "orders": [
-                {
-                    "index": order.index,
-                    "refined": order.refined,
-                    "squad_id": order.squad_id,
-                    "access_level": order.access_level,
-                    "map_hint": order.map_hint,
-                    "code_name": recipe_map.get(order.index, {}).get("code_name"),
-                    "display_name": recipe_map.get(order.index, {}).get("display_name"),
-                }
-                for order in report.orders
-            ],
-        }
+        payload = stockpiles_to_json_payload(stockpiles)
         output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        typer.echo(f"Wrote {len(report.orders)} orders to {output}")
+        typer.echo(f"Wrote {len(stockpiles)} refinery stockpiles to {output}")
         return
 
     typer.echo(f"Source: {report.source}")
-    if not report.orders:
+    if not stockpiles:
         typer.echo("No refinery orders found (open facility tooltips on the map to cache them).")
         return
-    typer.echo(f"Refinery orders found: {len(report.orders)}")
-    seen: set[tuple[object, ...]] = set()
-    for order in report.orders:
-        key = (order.index, order.refined, order.squad_id, order.access_level)
-        if key in seen:
-            continue
-        seen.add(key)
-        typer.echo(_format_order(order, recipe_map))
+    typer.echo(f"Refinery orders found: {len(stockpiles)}")
+    for stockpile in stockpiles:
+        typer.echo(_format_stockpile(stockpile))
