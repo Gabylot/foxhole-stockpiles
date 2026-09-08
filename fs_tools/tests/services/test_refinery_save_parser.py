@@ -1,6 +1,7 @@
 """Tests for the refinery MapData.sav parser."""
 
 import struct
+from pathlib import Path
 
 import pytest
 
@@ -82,21 +83,21 @@ def _build_save(elements: bytes, map_id: str = "TerminusHex") -> bytes:
 class TestParseMapData:
     """Tests for parse_map_data."""
 
-    def test_rejects_non_gvas_file(self, tmp_path) -> None:
+    def test_rejects_non_gvas_file(self, tmp_path: Path) -> None:
         """A file without the GVAS magic raises ValueError."""
         save = tmp_path / "x_MapData.sav"
         save.write_bytes(b"NOTGVAS" + b"\x00" * 32)
         with pytest.raises(ValueError, match="Not a GVAS save file"):
             parse_map_data(save)
 
-    def test_empty_save_yields_no_orders(self, tmp_path) -> None:
+    def test_empty_save_yields_no_orders(self, tmp_path: Path) -> None:
         """A GVAS save without storage elements yields no orders."""
         save = tmp_path / "x_MapData.sav"
         save.write_bytes(b"GVAS" + b"\x00" * 64)
         report = parse_map_data(save)
         assert report.orders == []
 
-    def test_single_squad_order(self, tmp_path) -> None:
+    def test_single_squad_order(self, tmp_path: Path) -> None:
         """A single squad storage element is parsed completely."""
         save = tmp_path / "x_MapData.sav"
         save.write_bytes(_build_save(_storage_element("Squad", 206, 5, 1128)))
@@ -110,7 +111,7 @@ class TestParseMapData:
         assert order.access_level == "squad"
         assert order.map_hint == "TerminusHex"
 
-    def test_personal_order_has_no_squad_id(self, tmp_path) -> None:
+    def test_personal_order_has_no_squad_id(self, tmp_path: Path) -> None:
         """A personal storage element reports no squad id."""
         save = tmp_path / "x_MapData.sav"
         save.write_bytes(_build_save(_storage_element("Personal", 0, 1, 42)))
@@ -121,7 +122,7 @@ class TestParseMapData:
         assert order.is_squad_order is False
         assert order.access_level == "personal"
 
-    def test_chained_elements_are_all_parsed(self, tmp_path) -> None:
+    def test_chained_elements_are_all_parsed(self, tmp_path: Path) -> None:
         """Consecutive elements without repeated headers are all parsed."""
         terminator = b"\x05\x00\x00\x00" + b"None\x00"
         elements = (
@@ -144,7 +145,7 @@ class TestParseMapData:
             (1, 5309),
         ]
 
-    def test_invalid_element_is_skipped(self, tmp_path) -> None:
+    def test_invalid_element_is_skipped(self, tmp_path: Path) -> None:
         """A corrupted element does not abort parsing of later elements."""
         good = _storage_element("Squad", 206, 2, 837)
         # Corrupt the index value position of an otherwise valid copy.
