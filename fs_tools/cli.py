@@ -99,33 +99,6 @@ def build_catalog(
     )
 
 
-@app.command("read-sav")
-def read_sav(
-    save_file: Path | None = typer.Option(
-        None,
-        "--save-file",
-        help="Path to a <steamid>_MapData.sav file or a SaveGames directory"
-        " (default: newest file in the local Foxhole SaveGames directory).",
-    ),
-    output: Path | None = typer.Option(
-        None, "--output", help="Write the result as JSON to this file instead of printing."
-    ),
-    recipes: Path | None = typer.Option(
-        None,
-        "--recipes",
-        help="Path to a refinery recipe mapping JSON (default: bundled"
-        " refinery_recipes.json next to the sav_reader module).",
-    ),
-    verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging (debug level)."),
-    quiet: bool = typer.Option(False, "--quiet", help="Suppress all output except errors."),
-) -> None:
-    """Read squad refinery queue data from Foxhole's MapData.sav."""
-    from fs_tools.commands.sav_reader.sav_reader import run
-
-    asyncio.run(run(save_file=save_file, output=output, recipes=recipes, verbose=verbose,
-                    quiet=quiet))
-
-
 @app.command("build-db")
 def build_db(
     templates: Path = typer.Option(..., "--templates", help="Path to extracted templates."),

@@ -22,8 +22,12 @@ class Stockpile(BaseModel):
     hex: str | None = Field(description="Hex region name", default=None)
     coords: StockpileCoords | None = Field(description="Map coordinates", default=None)
     is_reserve: bool = Field(description="Whether this is a reserve stockpile", default=False)
-    access_level: str = Field(
-        description="Refinery access level: 'squad', 'personal' or 'public'", default="personal"
+    access_level: str | None = Field(
+        description=(
+            "Refinery queue access level: 'squad', 'personal' or 'public';"
+            " None for non-queue stockpiles"
+        ),
+        default=None,
     )
     squad_id: int | None = Field(
         description="Owning squad id for a squad refinery queue, else None", default=None

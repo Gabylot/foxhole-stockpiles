@@ -158,6 +158,8 @@ def _convert_to_stockpile(data: dict[str, Any]) -> Stockpile:
         hex=data.get("hex"),
         coords=coords,
         is_reserve=data.get("is_reserve", False),
+        access_level=data.get("access_level"),
+        squad_id=data.get("squad_id"),
         items=items,
         timestamp=timestamp,
         raw_timestamp=None,  # fs-sav doesn't expose raw ticks
