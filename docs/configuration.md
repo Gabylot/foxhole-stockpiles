@@ -149,6 +149,22 @@ Example: `{timestamp}_{stockpile_type}_{stockpile_name}_{resolution}.json` → `
 | `start_cell` | string\|null | No | Anchor cell where writing begins (e.g. `"A1"`) |
 | `row_format` | object\|null | No | Row layout settings controlling how values are written |
 
+**Discord Handler** - Renders each result as an image and posts it to a Discord webhook:
+| Setting | Type | Required | Description |
+|---------|------|----------|-------------|
+| `type` | string | Yes | Must be `"discord"` |
+| `url` | string | No | Discord webhook URL (`https://discord.com/api/webhooks/<id>/<token>`) |
+| `username` | string\|null | No | Overrides the webhook's display name |
+| `avatar_url` | string\|null | No | Overrides the webhook's avatar image |
+| `message` | string\|null | No | Text posted next to the image |
+| `headline` | string\|null | No | Title drawn at the top of the image; empty falls back to the stockpile name |
+| `aggregate` | bool | No | Combine all stockpiles into one image (`false` by default) |
+| `font_path` | string\|null | No | Path to a `.ttf`/`.otf` font used to draw the image |
+| `min_interval_minutes` | float | No | Minimum minutes between posts (`0` disables throttling) |
+| `last_sent_at` | string\|null | No | Set automatically; the cooldown timestamp |
+
+See the [Discord guide](discord.md) for details.
+
 #### Example: Multiple Handlers
 
 ```json
@@ -478,5 +494,5 @@ export FS_OUTPUT__HANDLERS='[
 ]'
 ```
 
-Handler types: `return`, `file`, `webhook`, `console`, `sheets`
+Handler types: `return`, `file`, `webhook`, `console`, `sheets`, `discord`
 Format types: `json`, `csv`, `tsv`

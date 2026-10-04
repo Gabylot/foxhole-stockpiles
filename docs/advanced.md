@@ -164,12 +164,13 @@ A scan produces one stockpile result, fanned out to the handlers configured unde
 - **webhook** — HTTP POST to a URL (basic, bearer, and header auth; "header" puts the token in a user-chosen header)
 - **return** — returns the result to the caller in-process
 - **sheets** — appends rows to a Google Sheet
+- **discord** — renders the result as an image and posts it to a Discord webhook, with an optional cooldown so a capture loop cannot flood the channel
 
-> There is no built-in notification system. To send scans to Discord, use a **webhook** handler pointed at a Discord webhook URL (or any HTTP endpoint).
 
 More configuration guides:
 
 - [Configuration Examples](examples/README.md) — ready-to-use config files
 - [Configuration Guide](configuration.md) — environment variables and settings
 - [Webhook Integration](webhooks.md) — webhook setup and usage
+- [Discord Image Output](discord.md) — posting scans as images to a Discord channel
 - [Troubleshooting](troubleshooting.md) — common issues and solutions

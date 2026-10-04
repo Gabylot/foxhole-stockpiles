@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-10-04
+
+### Added
+- **Discord image output handler.** A new `discord` handler renders each scan
+  as a picture and posts it to a Discord webhook. Rows show item display names
+  and quantities grouped by catalog category, with a headline and a footer
+  carrying the item total and generation time.
+  - `headline` and `message` templates accept placeholders such as `{name}`,
+    `{type}`, `{hex}`, `{ingame_timestamp}`, `{item_count}` and `{total_items}`.
+  - `min_interval_minutes` limits posts to one per channel per window, so a
+    capture loop cannot flood a channel. The last post time is stored in the
+    config as `last_sent_at`, so the cooldown survives a restart, and a failed
+    post does not start it.
+  - `username`, `avatar_url` and `font_path` are configurable; display names
+    resolve through the catalog.
+  - `aggregate` merges every stockpile from a scan into a single image instead
+    of posting one image per stockpile. Items merge on their code and
+    quantities are summed, so the image holds one row per distinct item.
+    Crated and loose stock stay separate, and an unknown quantity keeps its
+    row unknown instead of publishing a partial total.
+  - Rows are grouped by catalog category, ordered by supply so small arms and
+    munitions come first and vehicles and shippables last. Crated stock is
+    named `<item> Crate` under a `<category> Crates` heading, and items the
+    game leaves uncategorised (vehicles, structures) are grouped from their
+    own data rather than a catch-all.
+
 ## [1.1.0] - 2026-07-14
 
 ### Added

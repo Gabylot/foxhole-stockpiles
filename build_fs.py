@@ -59,6 +59,7 @@ def get_fs_hidden_imports() -> list[str]:
         "foxhole_stockpiles.core.settings",
         "foxhole_stockpiles.core.settings.app_settings",
         "foxhole_stockpiles.core.settings.config_migrator",
+        "foxhole_stockpiles.core.settings.discord_throttle",
         "foxhole_stockpiles.core.settings.json_settings_source",
         "foxhole_stockpiles.core.settings.sections",
         "foxhole_stockpiles.core.settings.sections.scanner",
@@ -75,6 +76,7 @@ def get_fs_hidden_imports() -> list[str]:
         "foxhole_stockpiles.core.settings.sections.output.webhook_handler",
         "foxhole_stockpiles.core.settings.sections.output.return_handler",
         "foxhole_stockpiles.core.settings.sections.output.sheets_handler",
+        "foxhole_stockpiles.core.settings.sections.output.discord_handler",
         "foxhole_stockpiles.core.settings.sections.output.json_format",
         "foxhole_stockpiles.core.settings.sections.output.csv_format",
         # Services (OCR seam, capture, local scan, output, SAV)
@@ -84,6 +86,7 @@ def get_fs_hidden_imports() -> list[str]:
         "foxhole_stockpiles.services.local_scan",
         "foxhole_stockpiles.services.output_coordinator",
         "foxhole_stockpiles.services.catalog_service",
+        "foxhole_stockpiles.services.image_renderer",
         "foxhole_stockpiles.services.sav_parser",
         "foxhole_stockpiles.services.savefile_processor",
         # Output handlers
@@ -92,6 +95,9 @@ def get_fs_hidden_imports() -> list[str]:
         "foxhole_stockpiles.handlers.webhook",
         "foxhole_stockpiles.handlers.response",
         "foxhole_stockpiles.handlers.sheets",
+        "foxhole_stockpiles.handlers.discord",
+        "foxhole_stockpiles.connectors.webhook",
+        "foxhole_stockpiles.connectors.discord",
         # Typer CLI application and command modules
         "foxhole_stockpiles.cli",
         "foxhole_stockpiles.cli.app",

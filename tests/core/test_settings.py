@@ -5,6 +5,8 @@ including validation, defaults, custom values, environment variable
 handling, and file-based configuration loading.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 from pydantic import ValidationError
 
@@ -15,6 +17,7 @@ from foxhole_stockpiles.core.settings.sections.logging import LoggingSettings
 from foxhole_stockpiles.core.settings.sections.output import (
     ConsoleHandlerSettings,
     CsvFormatSettings,
+    DiscordHandlerSettings,
     FileHandlerSettings,
     JsonFormatSettings,
     OutputHandlerConfig,
@@ -25,6 +28,9 @@ from foxhole_stockpiles.core.settings.sections.output import (
 from foxhole_stockpiles.core.settings.sections.scanner import ScannerSettings
 from foxhole_stockpiles.enums.auth_type import AuthType
 from foxhole_stockpiles.enums.output_format import OutputFormat
+from foxhole_stockpiles.enums.output_handler_type import OutputHandlerType
+
+_DISCORD_URL = "https://discord.com/api/webhooks/123/tok"
 
 
 class TestLoggingSettings:
@@ -839,3 +845,72 @@ class TestSheetsHandlerSettings:
             == "https://docs.google.com/spreadsheets/d/12345/edit?gid=0#gid=0"
         )
         assert settings.sheet_id == "Sheet1"
+
+
+class TestDiscordHandlerSettings:
+    """Test cases for DiscordHandlerSettings."""
+
+    def test_valid_discord_url_accepted(self) -> None:
+        """A well-formed Discord webhook URL is accepted."""
+        settings = DiscordHandlerSettings(url="https://discord.com/api/webhooks/123/tok")
+        assert settings.type == OutputHandlerType.DISCORD
+        assert settings.min_interval_minutes == 0.0
+        assert settings.last_sent_at is None
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://discordapp.com/api/webhooks/123/tok",
+            "https://canary.discord.com/api/webhooks/123/tok",
+        ],
+    )
+    def test_alternate_discord_hosts_accepted(self, url: str) -> None:
+        """Legacy and canary Discord hosts are accepted."""
+        assert DiscordHandlerSettings(url=url).url == url
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://example.com/api/webhooks/123/tok",
+            "https://discord.com/api/oauth2/token",
+            "ftp://discord.com/api/webhooks/123/tok",
+            "not-a-url",
+        ],
+    )
+    def test_invalid_url_rejected(self, url: str) -> None:
+        """Non-Discord or malformed URLs are rejected."""
+        with pytest.raises(ValueError):
+            DiscordHandlerSettings(url=url)
+
+    def test_negative_interval_rejected(self) -> None:
+        """A negative cooldown is rejected."""
+        with pytest.raises(ValueError):
+            DiscordHandlerSettings(url=_DISCORD_URL, min_interval_minutes=-1)
+
+    def test_non_finite_interval_rejected(self) -> None:
+        """NaN and infinite cooldowns are rejected."""
+        with pytest.raises(ValueError):
+            DiscordHandlerSettings(url=_DISCORD_URL, min_interval_minutes=float("nan"))
+        with pytest.raises(ValueError):
+            DiscordHandlerSettings(url=_DISCORD_URL, min_interval_minutes=float("inf"))
+
+    def test_oversized_interval_rejected(self) -> None:
+        """A cooldown beyond the maximum is rejected."""
+        with pytest.raises(ValueError):
+            DiscordHandlerSettings(url=_DISCORD_URL, min_interval_minutes=100_000)
+
+    def test_last_sent_at_persists_through_json(self) -> None:
+        """last_sent_at survives a JSON round trip."""
+        stamp = datetime(2026, 1, 2, 3, 4, tzinfo=UTC)
+        settings = DiscordHandlerSettings(url=_DISCORD_URL, last_sent_at=stamp)
+        restored = DiscordHandlerSettings.model_validate_json(settings.model_dump_json())
+        assert restored.last_sent_at == stamp
+
+    def test_forced_to_json_format(self) -> None:
+        """Discord handlers only support JSON output."""
+        config = OutputHandlerConfig(
+            name="Discord",
+            format=CsvFormatSettings(type=OutputFormat.CSV),
+            handler=DiscordHandlerSettings(url=_DISCORD_URL),
+        )
+        assert isinstance(config.format, JsonFormatSettings)

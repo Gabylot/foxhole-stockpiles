@@ -10,6 +10,7 @@ import pytest
 
 from foxhole_stockpiles.core.settings.sections.output import (
     ConsoleHandlerSettings,
+    DiscordHandlerSettings,
     FileHandlerSettings,
     JsonFormatSettings,
     OutputHandlerConfig,
@@ -19,6 +20,7 @@ from foxhole_stockpiles.core.settings.sections.output import (
 )
 from foxhole_stockpiles.enums.auth_type import AuthType
 from foxhole_stockpiles.enums.stockpile_type import StockpileType
+from foxhole_stockpiles.handlers.discord import DiscordOutputHandler
 from foxhole_stockpiles.models.stockpile import Stockpile
 from foxhole_stockpiles.models.stockpile_item import StockpileItem
 from foxhole_stockpiles.services.output_coordinator import OutputCoordinator
@@ -389,3 +391,45 @@ class TestOutputCoordinator:
         assert len(result["stockpiles"]) == 2
         assert result["stockpiles"][0]["name"] == "Test Stockpile"
         assert result["stockpiles"][1]["name"] == "Second Stockpile"
+
+
+class TestDiscordHandler:
+    """Test suite for Discord handler dispatch through the coordinator."""
+
+    def test_creates_discord_handler(self) -> None:
+        """A discord handler config produces a DiscordOutputHandler."""
+        from foxhole_stockpiles.handlers.discord import DiscordOutputHandler
+
+        settings = OutputSettings(
+            handlers=[
+                OutputHandlerConfig(
+                    name="Discord",
+                    handler=DiscordHandlerSettings(url="https://discord.com/api/webhooks/123/tok"),
+                )
+            ]
+        )
+        coordinator = OutputCoordinator(settings)
+        handler = coordinator._create_handler(settings.handlers[0])
+        assert isinstance(handler, DiscordOutputHandler)
+
+    @pytest.mark.asyncio
+    async def test_discord_response_is_returned(self, sample_stockpile: Stockpile) -> None:
+        """The Discord result is surfaced as the coordinator response."""
+        from unittest.mock import AsyncMock
+
+        settings = OutputSettings(
+            handlers=[
+                OutputHandlerConfig(
+                    name="Discord",
+                    handler=DiscordHandlerSettings(url="https://discord.com/api/webhooks/123/tok"),
+                )
+            ]
+        )
+        coordinator = OutputCoordinator(settings)
+
+        with patch.object(DiscordOutputHandler, "handle", new_callable=AsyncMock) as handle:
+            handle.return_value = {"status": "ok", "sent": 1}
+            result = await coordinator.handle_output([sample_stockpile])
+
+        assert result == {"status": "ok", "sent": 1}
+        handle.assert_awaited_once()

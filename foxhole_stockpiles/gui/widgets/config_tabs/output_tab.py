@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from foxhole_stockpiles.core.settings.sections.output import (
+    DiscordHandlerSettings,
     FileHandlerSettings,
     OutputHandlerConfig,
     OutputSettings,
@@ -166,6 +167,15 @@ class OutputTab(QWidget):
                 url = handler.url or ""
                 truncated_url = url[:40] + "..." if len(url) > 40 else url
                 item_text = f"{handler_config.name} [{format_str}] - {truncated_url}"
+            elif isinstance(handler, DiscordHandlerSettings):
+                url = handler.url or ""
+                truncated_url = url[:40] + "..." if len(url) > 40 else url
+                cooldown = (
+                    f" (every {handler.min_interval_minutes:g} min)"
+                    if handler.min_interval_minutes > 0
+                    else ""
+                )
+                item_text = f"{handler_config.name} [{format_str}] - {truncated_url}{cooldown}"
 
             item = QListWidgetItem(item_text)
             item.setToolTip(f"Type: {handler_type}, Format: {format_str}")

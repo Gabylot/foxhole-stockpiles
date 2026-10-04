@@ -4,9 +4,11 @@ import os
 import re
 
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -22,6 +24,7 @@ from PySide6.QtWidgets import (
 from foxhole_stockpiles.core.settings.sections.output import (
     ConsoleHandlerSettings,
     CsvFormatSettings,
+    DiscordHandlerSettings,
     FileHandlerSettings,
     JsonFormatSettings,
     OutputHandlerConfig,
@@ -160,6 +163,50 @@ class OutputHandlerDialog(QDialog):
 
         layout.addWidget(self.sheets_group)
 
+        # Discord Settings Group
+        self.discord_group = QGroupBox()
+        discord_layout = QFormLayout()
+        self.discord_group.setLayout(discord_layout)
+
+        self.discord_url_label = QLabel()
+        self.discord_url_input = QLineEdit()
+        discord_layout.addRow(self.discord_url_label, self.discord_url_input)
+
+        self.discord_username_label = QLabel()
+        self.discord_username_input = QLineEdit()
+        discord_layout.addRow(self.discord_username_label, self.discord_username_input)
+
+        self.discord_message_label = QLabel()
+        self.discord_message_input = QLineEdit()
+        discord_layout.addRow(self.discord_message_label, self.discord_message_input)
+
+        self.discord_headline_label = QLabel()
+        self.discord_headline_input = QLineEdit()
+        discord_layout.addRow(self.discord_headline_label, self.discord_headline_input)
+
+        self.discord_min_interval_label = QLabel()
+        self.discord_min_interval_input = QDoubleSpinBox()
+        self.discord_min_interval_input.setDecimals(1)
+        self.discord_min_interval_input.setRange(0.0, 1440.0)
+        self.discord_min_interval_input.setSuffix(" min")
+        discord_layout.addRow(self.discord_min_interval_label, self.discord_min_interval_input)
+
+        self.discord_aggregate_input = QCheckBox()
+        self.discord_aggregate_input.setTristate(False)
+        discord_layout.addRow("", self.discord_aggregate_input)
+
+        self.discord_font_label = QLabel()
+
+        discord_font_layout = QHBoxLayout()
+        self.discord_font_input = QLineEdit()
+        self.discord_font_browse_btn = QPushButton()
+        self.discord_font_browse_btn.clicked.connect(self._browse_font)
+        discord_font_layout.addWidget(self.discord_font_input)
+        discord_font_layout.addWidget(self.discord_font_browse_btn)
+        discord_layout.addRow(self.discord_font_label, discord_font_layout)
+
+        layout.addWidget(self.discord_group)
+
         # Button box
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -255,12 +302,56 @@ class OutputHandlerDialog(QDialog):
         )
         self.row_format_input.setToolTip(t("output_tab.handler_dialog.row_format_tooltip"))
 
+        # Discord Settings
+        self.discord_group.setTitle(t("output_tab.handler_dialog.discord_settings"))
+        self.discord_url_label.setText(t("output_tab.handler_dialog.discord_url"))
+        self.discord_url_input.setPlaceholderText(
+            t("output_tab.handler_dialog.discord_url_placeholder")
+        )
+        self.discord_url_input.setToolTip(t("output_tab.handler_dialog.discord_url_tooltip"))
+        self.discord_username_label.setText(t("output_tab.handler_dialog.discord_username"))
+        self.discord_username_input.setPlaceholderText(
+            t("output_tab.handler_dialog.discord_username_placeholder")
+        )
+        self.discord_username_input.setToolTip(
+            t("output_tab.handler_dialog.discord_username_tooltip")
+        )
+        self.discord_message_label.setText(t("output_tab.handler_dialog.discord_message"))
+        self.discord_message_input.setPlaceholderText(
+            t("output_tab.handler_dialog.discord_message_placeholder")
+        )
+        self.discord_message_input.setToolTip(
+            t("output_tab.handler_dialog.discord_message_tooltip")
+        )
+        self.discord_headline_label.setText(t("output_tab.handler_dialog.discord_headline"))
+        self.discord_headline_input.setPlaceholderText(
+            t("output_tab.handler_dialog.discord_headline_placeholder")
+        )
+        self.discord_headline_input.setToolTip(
+            t("output_tab.handler_dialog.discord_headline_tooltip")
+        )
+        self.discord_min_interval_label.setText(t("output_tab.handler_dialog.discord_min_interval"))
+        self.discord_min_interval_input.setToolTip(
+            t("output_tab.handler_dialog.discord_min_interval_tooltip")
+        )
+        self.discord_aggregate_input.setText(t("output_tab.handler_dialog.discord_aggregate"))
+        self.discord_aggregate_input.setToolTip(
+            t("output_tab.handler_dialog.discord_aggregate_tooltip")
+        )
+        self.discord_font_label.setText(t("output_tab.handler_dialog.discord_font"))
+        self.discord_font_input.setPlaceholderText(
+            t("output_tab.handler_dialog.discord_font_placeholder")
+        )
+        self.discord_font_input.setToolTip(t("output_tab.handler_dialog.discord_font_tooltip"))
+        self.discord_font_browse_btn.setText(t("common.browse"))
+
     def _on_handler_type_changed(self) -> None:
         """Handle handler type change to show/hide relevant sections."""
         handler_type = self.handler_type_input.currentText()
         self.file_group.setVisible(handler_type == "file")
         self.webhook_group.setVisible(handler_type == "webhook")
         self.sheets_group.setVisible(handler_type == "google sheets")
+        self.discord_group.setVisible(handler_type == "discord")
         # Show format selection only for file handler (webhook/return are JSON-only)
         show_format = handler_type == "file"
         self.format_label.setVisible(show_format)
@@ -324,6 +415,14 @@ class OutputHandlerDialog(QDialog):
             self.sheet_id_input.setText(handler.sheet_id or "")
             self.start_cell_input.setText(handler.start_cell or "")
             self.row_format_input.setText(handler.row_format or "")
+        elif isinstance(handler, DiscordHandlerSettings):
+            self.discord_url_input.setText(handler.url or "")
+            self.discord_username_input.setText(handler.username or "")
+            self.discord_message_input.setText(handler.message or "")
+            self.discord_headline_input.setText(handler.headline or "")
+            self.discord_min_interval_input.setValue(handler.min_interval_minutes)
+            self.discord_aggregate_input.setChecked(handler.aggregate)
+            self.discord_font_input.setText(handler.font_path or "")
 
         self._on_handler_type_changed()
         self._on_webhook_auth_changed()
@@ -420,6 +519,20 @@ class OutputHandlerDialog(QDialog):
                 self._warn("output_tab.handler_dialog.row_format_missing")
                 return
 
+        elif handler_type == "discord":
+            if not self._require_field(
+                self.discord_url_input.text().strip(),
+                self.discord_url_input,
+                "output_tab.handler_dialog.discord_url_required",
+            ):
+                return
+
+            try:
+                DiscordHandlerSettings(url=self.discord_url_input.text().strip())
+            except ValueError:
+                self._warn("output_tab.handler_dialog.discord_url_invalid", self.discord_url_input)
+                return
+
         self.accept()
 
     def get_handler_config(self) -> OutputHandlerConfig:
@@ -448,6 +561,7 @@ class OutputHandlerDialog(QDialog):
             | WebhookHandlerSettings
             | ConsoleHandlerSettings
             | SheetsHandlerSettings
+            | DiscordHandlerSettings
         )
         match handler_type:
             case OutputHandlerType.FILE:
@@ -481,6 +595,19 @@ class OutputHandlerDialog(QDialog):
                 )
                 if not name:
                     name = "Append rows (Google Sheets)"
+            case OutputHandlerType.DISCORD:
+                font_path = self.discord_font_input.text().strip()
+                handler_settings = DiscordHandlerSettings(
+                    url=self.discord_url_input.text().strip() or None,
+                    username=self.discord_username_input.text().strip() or None,
+                    message=self.discord_message_input.text().strip() or None,
+                    headline=self.discord_headline_input.text().strip() or None,
+                    font_path=font_path or None,
+                    min_interval_minutes=self.discord_min_interval_input.value(),
+                    aggregate=self.discord_aggregate_input.isChecked(),
+                )
+                if not name:
+                    name = "Discord Image"
             case _:  # RETURN
                 handler_settings = ReturnHandlerSettings()
                 if not name:
@@ -491,6 +618,17 @@ class OutputHandlerDialog(QDialog):
             format=format_settings,
             handler=handler_settings,
         )
+
+    def _browse_font(self) -> None:
+        """Open file dialog for the font used to render the image."""
+        filepath, _ = QFileDialog.getOpenFileName(
+            self,
+            t("output_tab.handler_dialog.discord_font"),
+            "",
+            "TrueType Fonts (*.ttf *.otf);;All Files (*)",
+        )
+        if filepath:
+            self.discord_font_input.setText(filepath)
 
     def browse_credentials(self) -> None:
         """Open file dialog for credentials path."""

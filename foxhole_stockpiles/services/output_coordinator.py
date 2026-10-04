@@ -5,6 +5,7 @@ from typing import Any
 
 from foxhole_stockpiles.core.settings.sections.output import (
     ConsoleHandlerSettings,
+    DiscordHandlerSettings,
     FileHandlerSettings,
     OutputHandlerConfig,
     OutputSettings,
@@ -14,6 +15,7 @@ from foxhole_stockpiles.core.settings.sections.output import (
 )
 from foxhole_stockpiles.handlers.base_handler import BaseOutputDestinationHandler
 from foxhole_stockpiles.handlers.console import ConsoleOutputHandler
+from foxhole_stockpiles.handlers.discord import DiscordOutputHandler
 from foxhole_stockpiles.handlers.file import FileOutputHandler
 from foxhole_stockpiles.handlers.response import ReturnOutputHandler
 from foxhole_stockpiles.handlers.sheets import SheetsOutputHandler
@@ -65,6 +67,8 @@ class OutputCoordinator:
                 return ConsoleOutputHandler()
             case SheetsHandlerSettings():
                 return SheetsOutputHandler(sheets_settings=handler_settings)
+            case DiscordHandlerSettings():
+                return DiscordOutputHandler(discord_settings=handler_settings)
             case _:
                 raise ValueError(f"Unsupported handler type: {type(handler_settings)}")
 

@@ -79,6 +79,7 @@ A scan is sent to whichever outputs you enable in **Settings → Output**:
 - **File** — writes JSON, CSV, or TSV to disk.
 - **Webhook** — sends each result to a web address you choose. **Want it in Discord?** Paste your Discord channel's webhook URL here and results post straight to the channel.
 - **Google Sheets** — appends rows to a sheet.
+- **Discord** — renders the result as a picture and posts it to a Discord channel, with an optional cooldown so a capture loop can't flood it.
 
 ## Languages
 
